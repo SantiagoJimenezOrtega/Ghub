@@ -1,0 +1,41 @@
+// docker-compose.yml
+version: '3.8'
+
+services:
+  frontend:
+    build: ./
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    depends_on:
+      - supabase
+    environment:
+      - SUPABASE_URL=http://supabase:54321
+      - SUPABASE_ANON_KEY=your-anon-key
+
+  supabase:
+    image: supabase/supabase:edge
+    ports:
+      - "54321:54321"
+    volumes:
+      - ./migrations:/migrations
+    environment:
+      - SUPABASE_DB_URL=postgresql://postgres:postgres@db:5432/postgres
+      - SUPABASE_DB_NAME=students
+      - SUPABASE_DB_USER=postgres
+      - SUPABASE_DB_PASSWORD=postgres
+      - SUPABASE_DB_HOST=db
+      - SUPABASE_DB_PORT=5432
+
+  db:
+    image: postgres:16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=students
+
+volumes:
+  postgres_data:

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8" />
+  <script>
+    // BLOQUEADOR DE ERRORES DE EXTENSIONES (Inyección temprana)
+    window.addEventListener('error', function (e) {
+      if (e.filename && e.filename.indexOf('chrome-extension') !== -1) {
+        e.stopImmediatePropagation();
+      }
+      if (e.message && e.message.indexOf('onMessage') !== -1) {
+        e.stopImmediatePropagation();
+      }
+    }, true);
+    window.addEventListener('unhandledrejection', function (e) {
+      if (e.reason && e.reason.stack && e.reason.stack.indexOf('chrome-extension') !== -1) {
+        e.stopImmediatePropagation();
+      }
+    }, true);
+  </script>
+  <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Genuine 10th HUB Platform" />
+  <title>Genuine 10th HUB</title>
+</head>
+
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+</body>
+
+</html>
