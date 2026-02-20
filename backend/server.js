@@ -68,6 +68,12 @@ app.get('/api/profiles/:id', async (req, res) => {
     res.json(data);
 });
 
+app.put('/api/profiles/:id', async (req, res) => {
+    const { data, error } = await supabase.from('profiles').update(req.body).eq('id', req.params.id).select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+});
+
 // --- POSTS ---
 const getPostsWithStats = async (isGlobal, targetId = null) => {
     let query = supabase.from('posts').select('*, profiles:profile_id(nickname, photo_url), comments:comments(id), reactions:reactions(id)');
