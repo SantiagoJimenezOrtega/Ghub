@@ -49,6 +49,11 @@ function Feed({ currentUser }) {
     const [newComment, setNewComment] = useState({});
     const [particles, setParticles] = useState([]);
     const [birthdayUsers, setBirthdayUsers] = useState([]);
+    const [editingPostId, setEditingPostId] = useState(null);
+    const [editContent, setEditContent] = useState('');
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editCommentContent, setEditCommentContent] = useState('');
+
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -151,14 +156,61 @@ function Feed({ currentUser }) {
         fetchPosts();
     };
 
+    const startEditPost = (post) => {
+        setEditingPostId(post.id);
+        setEditContent(post.content);
+    };
+
+    const saveEditPost = async (postId) => {
+        if (!editContent.trim()) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/posts/${postId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: editContent })
+        });
+        setEditingPostId(null);
+        fetchPosts();
+    };
+
+    const deletePost = async (postId) => {
+        if (!window.confirm('¿Estás seguro de que quieres eliminar esta publicación?')) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/posts/${postId}`, { method: 'DELETE' });
+        fetchPosts();
+    };
+
+    const startEditComment = (comment) => {
+        setEditingCommentId(comment.id);
+        setEditCommentContent(comment.content);
+    };
+
+    const saveEditComment = async (commentId, postId) => {
+        if (!editCommentContent.trim()) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: editCommentContent })
+        });
+        setEditingCommentId(null);
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/comments/${postId}`);
+        const data = await res.json();
+        setCommentsData({ ...commentsData, [postId]: data });
+    };
+
+    const deleteComment = async (commentId, postId) => {
+        if (!window.confirm('¿Eliminar este comentario?')) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/comments/${commentId}`, { method: 'DELETE' });
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/comments/${postId}`);
+        const data = await res.json();
+        setCommentsData({ ...commentsData, [postId]: data });
+        fetchPosts();
+    };
+
     return (
         <div className="space-y-6">
-            {/* Partículas de Reacción */}
             {particles.map(p => (
                 <div key={p.id} className="fixed pointer-events-none text-xl animate-particle" style={{ left: p.x, top: p.y, '--angle': `${p.angle}rad` }}>❤️</div>
             ))}
 
-            {/* Recordatorio de Cumpleaños */}
             <BirthdayBanner birthdayUsers={birthdayUsers} />
 
             {currentUser && (
@@ -182,9 +234,11 @@ function Feed({ currentUser }) {
             <div className="space-y-8">
                 {posts.map(post => {
                     const ytId = extractYouTubeId(post.content);
+                    const isOwner = currentUser?.id === post.profile_id;
+
                     return (
-                        <div key={post.id} className="glass-card p-6 animate-fade-in group">
-                            <div className="flex items-center space-x-3 mb-6">
+                        <div key={post.id} className="glass-card p-6 animate-fade-in group relative">
+                            <div className="flex items-center justify-between mb-6">
                                 <div
                                     className={`flex items-center space-x-3 ${post.is_anonymous ? '' : 'cursor-pointer hover:opacity-80 transition'}`}
                                     onClick={() => !post.is_anonymous && navigate(`/profile/${post.profile_id}`)}
@@ -195,11 +249,32 @@ function Feed({ currentUser }) {
                                         <p className="text-[10px] text-slate-500 uppercase tracking-widest">{new Date(post.created_at).toLocaleString()}</p>
                                     </div>
                                 </div>
+
+                                {isOwner && !post.is_anonymous && (
+                                    <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => startEditPost(post)} className="p-2 hover:bg-white/5 rounded-lg text-slate-400 hover:text-violet-400 transition" title="Editar">✏️</button>
+                                        <button onClick={() => deletePost(post.id)} className="p-2 hover:bg-white/5 rounded-lg text-slate-400 hover:text-red-400 transition" title="Eliminar">🗑️</button>
+                                    </div>
+                                )}
                             </div>
 
-                            <p className="text-slate-300 leading-relaxed mb-6 whitespace-pre-wrap">{renderTextWithLinks(post.content)}</p>
+                            {editingPostId === post.id ? (
+                                <div className="space-y-3 mb-6">
+                                    <textarea
+                                        value={editContent}
+                                        onChange={e => setEditContent(e.target.value)}
+                                        className="w-full bg-white/5 border border-violet-500/30 rounded-xl p-4 text-white resize-none h-32"
+                                    />
+                                    <div className="flex space-x-2 justify-end">
+                                        <button onClick={() => setEditingPostId(null)} className="text-xs font-bold text-slate-500 uppercase px-4 py-2">Cancelar</button>
+                                        <button onClick={() => saveEditPost(post.id)} className="btn-primary text-xs px-6 py-2">Guardar Cambios</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-slate-300 leading-relaxed mb-6 whitespace-pre-wrap">{renderTextWithLinks(post.content)}</p>
+                            )}
 
-                            {ytId && (
+                            {!editingPostId && ytId && (
                                 <div className="aspect-video rounded-2xl overflow-hidden mb-6 border border-white/5 shadow-2xl">
                                     <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${ytId}?rel=0`} title="YT" frameBorder="0" allowFullScreen></iframe>
                                 </div>
@@ -209,10 +284,7 @@ function Feed({ currentUser }) {
                                 <button onClick={() => toggleComments(post.id)} className="text-xs font-black text-slate-500 hover:text-violet-400 transition uppercase tracking-tighter flex items-center space-x-2">
                                     <span>💬</span> <span>{(post.comment_count || 0) === 1 ? '1 comentario' : `${post.comment_count || 0} comentarios`}</span>
                                 </button>
-                                <button
-                                    onClick={(e) => handleReaction(post.id, e)}
-                                    className="text-xs font-black text-slate-500 hover:text-pink-400 transition uppercase tracking-tighter flex items-center space-x-2"
-                                >
+                                <button onClick={(e) => handleReaction(post.id, e)} className="text-xs font-black text-slate-500 hover:text-pink-400 transition uppercase tracking-tighter flex items-center space-x-2">
                                     <span className="text-sm">❤️</span> <span>{post.reaction_count || 0}</span>
                                 </button>
                             </div>
@@ -220,36 +292,62 @@ function Feed({ currentUser }) {
                             {activeComments[post.id] && (
                                 <div className="mt-6 space-y-4 animate-fade-in">
                                     <div className="space-y-3 pl-4 border-l-2 border-violet-500/10">
-                                        {commentsData[post.id]?.map(c => (
-                                            <div key={c.id} className="flex space-x-3 p-3 bg-white/5 rounded-xl">
-                                                <img
-                                                    src={c.profiles?.photo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=U'}
-                                                    className="w-8 h-8 rounded-lg object-cover cursor-pointer hover:opacity-80 transition"
-                                                    alt="av"
-                                                    onClick={() => navigate(`/profile/${c.author_id}`)}
-                                                />
-                                                <div>
-                                                    <p
-                                                        className="font-bold text-violet-400 text-xs cursor-pointer hover:underline"
+                                        {commentsData[post.id]?.map(c => {
+                                            const isCommentOwner = currentUser?.id === c.author_id;
+                                            return (
+                                                <div key={c.id} className="group/comment flex space-x-3 p-3 bg-white/5 rounded-xl relative">
+                                                    <img
+                                                        src={c.profiles?.photo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=U'}
+                                                        className="w-8 h-8 rounded-lg object-cover cursor-pointer hover:opacity-80 transition"
+                                                        alt="av"
                                                         onClick={() => navigate(`/profile/${c.author_id}`)}
-                                                    >
-                                                        {c.profiles?.nickname}
-                                                    </p>
-                                                    <p className="text-slate-300 text-sm mt-0.5">{c.content}</p>
+                                                    />
+                                                    <div className="flex-grow">
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="font-bold text-violet-400 text-xs cursor-pointer hover:underline" onClick={() => navigate(`/profile/${c.author_id}`)}>
+                                                                {c.profiles?.nickname}
+                                                            </p>
+                                                            {isCommentOwner && (
+                                                                <div className="flex space-x-1 opacity-0 group-hover/comment:opacity-100 transition-opacity">
+                                                                    <button onClick={() => startEditComment(c)} className="text-[10px] text-slate-500 hover:text-violet-400">Editar</button>
+                                                                    <button onClick={() => deleteComment(c.id, post.id)} className="text-[10px] text-slate-500 hover:text-red-400">Borrar</button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {editingCommentId === c.id ? (
+                                                            <div className="mt-2 space-y-2">
+                                                                <input
+                                                                    value={editCommentContent}
+                                                                    onChange={e => setEditCommentContent(e.target.value)}
+                                                                    className="w-full bg-white/10 border border-violet-500/30 rounded-lg p-2 text-xs text-white"
+                                                                    autoFocus
+                                                                />
+                                                                <div className="flex space-x-2 justify-end">
+                                                                    <button onClick={() => setEditingCommentId(null)} className="text-[10px] text-slate-500 uppercase">Cancelar</button>
+                                                                    <button onClick={() => saveEditComment(c.id, post.id)} className="text-[10px] text-violet-400 uppercase font-bold">Guardar</button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-slate-300 text-sm mt-0.5">{c.content}</p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
-                                    <div className="flex space-x-2 pt-2">
-                                        <input
-                                            value={newComment[post.id] || ''}
-                                            onChange={e => setNewComment({ ...newComment, [post.id]: e.target.value })}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') handlePostComment(post.id); }}
-                                            className="flex-grow input-field text-sm h-10"
-                                            placeholder="Escribe un comentario..."
-                                        />
-                                        <button onClick={() => handlePostComment(post.id)} className="btn-primary text-xs px-4">Enviar</button>
-                                    </div>
+                                    {!editingCommentId && (
+                                        <div className="flex space-x-2 pt-2">
+                                            <input
+                                                value={newComment[post.id] || ''}
+                                                onChange={e => setNewComment({ ...newComment, [post.id]: e.target.value })}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handlePostComment(post.id); }}
+                                                className="flex-grow input-field text-sm h-10"
+                                                placeholder="Escribe un comentario..."
+                                            />
+                                            <button onClick={() => handlePostComment(post.id)} className="btn-primary text-xs px-4">Enviar</button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

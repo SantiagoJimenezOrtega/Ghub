@@ -113,6 +113,19 @@ app.post('/api/posts', async (req, res) => {
     res.status(201).json(data);
 });
 
+app.put('/api/posts/:id', async (req, res) => {
+    const { content } = req.body;
+    const { data, error } = await supabase.from('posts').update({ content }).eq('id', req.params.id).select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data[0]);
+});
+
+app.delete('/api/posts/:id', async (req, res) => {
+    const { error } = await supabase.from('posts').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
 // --- COMMENTS ---
 app.get('/api/comments/:postId', async (req, res) => {
     const { data, error } = await supabase.from('comments').select('*, profiles:author_id(nickname, photo_url)').eq('post_id', req.params.postId).order('created_at', { ascending: true });
@@ -131,6 +144,19 @@ app.post('/api/comments', async (req, res) => {
     }
 
     res.status(201).json(data);
+});
+
+app.put('/api/comments/:id', async (req, res) => {
+    const { content } = req.body;
+    const { data, error } = await supabase.from('comments').update({ content }).eq('id', req.params.id).select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data[0]);
+});
+
+app.delete('/api/comments/:id', async (req, res) => {
+    const { error } = await supabase.from('comments').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
 });
 
 // --- REACTIONS ---

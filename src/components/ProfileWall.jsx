@@ -45,6 +45,11 @@ function ProfileWall({ studentId, currentUser }) {
     const [commentsData, setCommentsData] = useState({});
     const [newComment, setNewComment] = useState({});
     const [isBirthdayToday, setIsBirthdayToday] = useState(false);
+    const [editingPostId, setEditingPostId] = useState(null);
+    const [editContent, setEditContent] = useState('');
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editCommentContent, setEditCommentContent] = useState('');
+
     const navigate = useNavigate();
 
     const GIFTS = [
@@ -147,6 +152,55 @@ function ProfileWall({ studentId, currentUser }) {
         } catch (err) { console.error('Error commenting:', err); }
     };
 
+    const startEditPost = (post) => {
+        setEditingPostId(post.id);
+        setEditContent(post.content.replace(/\[GIFT:.*?\]/, ''));
+    };
+
+    const saveEditPost = async (postId) => {
+        if (!editContent.trim()) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/posts/${postId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: editContent })
+        });
+        setEditingPostId(null);
+        fetchPosts();
+    };
+
+    const deletePost = async (postId) => {
+        if (!window.confirm('¿Eliminar este mensaje del muro?')) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/posts/${postId}`, { method: 'DELETE' });
+        fetchPosts();
+    };
+
+    const startEditComment = (comment) => {
+        setEditingCommentId(comment.id);
+        setEditCommentContent(comment.content);
+    };
+
+    const saveEditComment = async (commentId, postId) => {
+        if (!editCommentContent.trim()) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: editCommentContent })
+        });
+        setEditingCommentId(null);
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/comments/${postId}`);
+        const data = await res.json();
+        setCommentsData({ ...commentsData, [postId]: data });
+    };
+
+    const deleteComment = async (commentId, postId) => {
+        if (!window.confirm('¿Eliminar comentario?')) return;
+        await fetch(`${process.env.REACT_APP_API_URL}/comments/${commentId}`, { method: 'DELETE' });
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/comments/${postId}`);
+        const data = await res.json();
+        setCommentsData({ ...commentsData, [postId]: data });
+        fetchPosts();
+    };
+
     const handleReaction = async (postId) => {
         try {
             await fetch(`${process.env.REACT_APP_API_URL}/reactions`, {
@@ -156,12 +210,6 @@ function ProfileWall({ studentId, currentUser }) {
             });
             fetchPosts();
         } catch (err) { console.error('Error reaccionando:', err); }
-    };
-
-    const renderCommentCount = (count) => {
-        const n = count || 0;
-        if (n === 1) return '1 comentario';
-        return `${n} comentarios`;
     };
 
     return (
@@ -212,26 +260,49 @@ function ProfileWall({ studentId, currentUser }) {
                     const ytId = extractYouTubeId(post.content);
                     const giftMatch = post.content.match(/\[GIFT:(.*?)\]/);
                     const cleanContent = post.content.replace(/\[GIFT:.*?\]/, '');
+                    const isOwner = currentUser?.id === post.profile_id;
 
                     return (
-                        <div key={post.id} className="glass-card p-6">
-                            <div
-                                className="flex items-center space-x-3 mb-4 cursor-pointer hover:opacity-80 transition group"
-                                onClick={() => navigate(`/profile/${post.profile_id}`)}
-                            >
-                                <img src={post.profiles?.photo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=U'} className="w-8 h-8 rounded-lg object-cover" alt="author" />
-                                <p className="font-bold text-violet-400 group-hover:underline">{post.is_anonymous ? 'Anónimo' : post.profiles?.nickname}</p>
+                        <div key={post.id} className="glass-card p-6 group">
+                            <div className="flex items-center justify-between mb-4">
+                                <div
+                                    className="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition"
+                                    onClick={() => navigate(`/profile/${post.profile_id}`)}
+                                >
+                                    <img src={post.profiles?.photo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=U'} className="w-8 h-8 rounded-lg object-cover" alt="author" />
+                                    <p className="font-bold text-violet-400 group-hover:underline">{post.is_anonymous ? 'Anónimo' : post.profiles?.nickname}</p>
+                                </div>
+                                {isOwner && (
+                                    <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => startEditPost(post)} className="text-[10px] text-slate-500 hover:text-violet-400 uppercase font-black">Editar</button>
+                                        <button onClick={() => deletePost(post.id)} className="text-[10px] text-slate-500 hover:text-red-400 uppercase font-black">Borrar</button>
+                                    </div>
+                                )}
                             </div>
 
-                            <p className="text-slate-300 mb-4 whitespace-pre-wrap">{renderTextWithLinks(cleanContent)}</p>
+                            {editingPostId === post.id ? (
+                                <div className="mb-4 space-y-2">
+                                    <textarea
+                                        value={editContent}
+                                        onChange={e => setEditContent(e.target.value)}
+                                        className="w-full bg-white/5 border border-violet-500/30 rounded-xl p-3 text-white text-sm"
+                                    />
+                                    <div className="flex space-x-2 justify-end">
+                                        <button onClick={() => setEditingPostId(null)} className="text-[10px] text-slate-500">Cancelar</button>
+                                        <button onClick={() => saveEditPost(post.id)} className="text-[10px] text-violet-400 font-bold">Guardar</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-slate-300 mb-4 whitespace-pre-wrap">{renderTextWithLinks(cleanContent)}</p>
+                            )}
 
-                            {giftMatch && (
+                            {!editingPostId && giftMatch && (
                                 <div className="mb-4 flex justify-center p-4 bg-white/5 rounded-2xl">
                                     <img src={giftMatch[1]} className="w-32 h-32 object-contain animate-bounce" alt="gift" />
                                 </div>
                             )}
 
-                            {ytId && (
+                            {!editingPostId && ytId && (
                                 <div className="aspect-video rounded-xl overflow-hidden mb-4 border border-white/10">
                                     <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${ytId}?rel=0`} title="YT" frameBorder="0" allowFullScreen></iframe>
                                 </div>
@@ -239,7 +310,7 @@ function ProfileWall({ studentId, currentUser }) {
 
                             <div className="flex items-center space-x-6 border-t border-slate-800/50 pt-4 mt-4">
                                 <button onClick={() => toggleComments(post.id)} className="text-xs font-black text-slate-500 hover:text-violet-400 transition uppercase tracking-tighter flex items-center space-x-2">
-                                    <span>💬</span> <span>{renderCommentCount(post.comment_count)}</span>
+                                    <span>💬</span> <span>{(post.comment_count || 0) === 1 ? '1 comentario' : `${post.comment_count || 0} comentarios`}</span>
                                 </button>
                                 <button onClick={() => handleReaction(post.id)} className="text-xs font-black text-slate-500 hover:text-pink-400 transition uppercase tracking-tighter flex items-center space-x-2">
                                     <span className="text-sm">❤️</span> <span>{post.reaction_count || 0}</span>
@@ -248,35 +319,64 @@ function ProfileWall({ studentId, currentUser }) {
 
                             {activeComments[post.id] && (
                                 <div className="mt-4 space-y-4">
-                                    {commentsData[post.id]?.map(c => (
-                                        <div key={c.id} className="flex space-x-2 text-xs bg-slate-900/50 p-3 rounded-lg">
-                                            <img
-                                                src={c.profiles?.photo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=U'}
-                                                className="w-6 h-6 rounded object-cover cursor-pointer hover:opacity-80 transition"
-                                                alt="c-author"
-                                                onClick={() => navigate(`/profile/${c.author_id}`)}
-                                            />
-                                            <div>
-                                                <p
-                                                    className="font-bold text-violet-400 cursor-pointer hover:underline"
+                                    {commentsData[post.id]?.map(c => {
+                                        const isCommentOwner = currentUser?.id === c.author_id;
+                                        return (
+                                            <div key={c.id} className="group/comment flex space-x-2 text-xs bg-slate-900/50 p-3 rounded-lg relative">
+                                                <img
+                                                    src={c.profiles?.photo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=U'}
+                                                    className="w-6 h-6 rounded object-cover cursor-pointer hover:opacity-80 transition"
+                                                    alt="c-author"
                                                     onClick={() => navigate(`/profile/${c.author_id}`)}
-                                                >
-                                                    {c.profiles?.nickname}
-                                                </p>
-                                                <p className="text-slate-300">{c.content}</p>
+                                                />
+                                                <div className="flex-grow">
+                                                    <div className="flex items-center justify-between">
+                                                        <p
+                                                            className="font-bold text-violet-400 cursor-pointer hover:underline"
+                                                            onClick={() => navigate(`/profile/${c.author_id}`)}
+                                                        >
+                                                            {c.profiles?.nickname}
+                                                        </p>
+                                                        {isCommentOwner && (
+                                                            <div className="flex space-x-1 opacity-0 group-hover/comment:opacity-100 transition-opacity">
+                                                                <button onClick={() => startEditComment(c)} className="text-[9px] text-slate-500 hover:text-violet-400">Editar</button>
+                                                                <button onClick={() => deleteComment(c.id, post.id)} className="text-[9px] text-slate-500 hover:text-red-400">Borrar</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {editingCommentId === c.id ? (
+                                                        <div className="mt-2 space-y-2">
+                                                            <input
+                                                                value={editCommentContent}
+                                                                onChange={e => setEditCommentContent(e.target.value)}
+                                                                className="w-full bg-white/10 border border-violet-500/30 rounded p-1 text-white"
+                                                                autoFocus
+                                                            />
+                                                            <div className="flex space-x-2 justify-end">
+                                                                <button onClick={() => setEditingCommentId(null)} className="text-[9px]">Canc.</button>
+                                                                <button onClick={() => saveEditComment(c.id, post.id)} className="text-[9px] text-violet-400 font-bold">OK</button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-slate-300">{c.content}</p>
+                                                    )}
+                                                </div>
                                             </div>
+                                        );
+                                    })}
+                                    {!editingCommentId && (
+                                        <div className="flex space-x-2">
+                                            <input
+                                                value={newComment[post.id] || ''}
+                                                onChange={e => setNewComment({ ...newComment, [post.id]: e.target.value })}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') postComment(post.id); }}
+                                                className="flex-grow input-field text-xs"
+                                                placeholder="Responder..."
+                                            />
+                                            <button onClick={() => postComment(post.id)} className="btn-primary text-xs py-1 px-3">OK</button>
                                         </div>
-                                    ))}
-                                    <div className="flex space-x-2">
-                                        <input
-                                            value={newComment[post.id] || ''}
-                                            onChange={e => setNewComment({ ...newComment, [post.id]: e.target.value })}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') postComment(post.id); }}
-                                            className="flex-grow input-field text-xs"
-                                            placeholder="Responder..."
-                                        />
-                                        <button onClick={() => postComment(post.id)} className="btn-primary text-xs py-1 px-3">OK</button>
-                                    </div>
+                                    )}
                                 </div>
                             )}
                         </div>
