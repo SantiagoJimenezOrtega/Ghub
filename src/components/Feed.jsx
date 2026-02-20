@@ -99,9 +99,21 @@ function Feed({ currentUser }) {
     };
 
     const extractYouTubeId = (url) => {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
         const match = url?.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : null;
+        return match ? match[1] : null;
+    };
+
+    const renderTextWithLinks = (text) => {
+        if (!text) return null;
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const parts = text.split(urlRegex);
+        return parts.map((part, i) => {
+            if (part.match(urlRegex)) {
+                return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline break-all transition-colors">{part}</a>;
+            }
+            return part;
+        });
     };
 
     const handlePublish = async () => {
@@ -185,7 +197,7 @@ function Feed({ currentUser }) {
                                 </div>
                             </div>
 
-                            <p className="text-slate-300 leading-relaxed mb-6 whitespace-pre-wrap">{post.content}</p>
+                            <p className="text-slate-300 leading-relaxed mb-6 whitespace-pre-wrap">{renderTextWithLinks(post.content)}</p>
 
                             {ytId && (
                                 <div className="aspect-video rounded-2xl overflow-hidden mb-6 border border-white/5 shadow-2xl">
